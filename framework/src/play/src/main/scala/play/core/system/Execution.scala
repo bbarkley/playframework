@@ -1,10 +1,11 @@
 package play.core
 
-import scala.concurrent.ExecutionContext
-import scala.concurrent.forkjoin.{ ForkJoinWorkerThread, ForkJoinPool }
 import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicInteger
+
+import scala.concurrent.ExecutionContext
 import scala.concurrent.forkjoin.ForkJoinPool.ForkJoinWorkerThreadFactory
+import scala.concurrent.forkjoin.{ForkJoinPool, ForkJoinWorkerThread}
 
 private[play] object Execution {
 
@@ -29,12 +30,18 @@ private[play] object Execution {
     val numberOfThreads = play.api.Play.maybeApplication.map(_.configuration.getInt("internal-threadpool-size")).flatten
       .getOrElse(Runtime.getRuntime.availableProcessors)
 
-    ExecutionContext.fromExecutorService(new ForkJoinPool(
+    println("in modified execution ")
+    new Exception().printStackTrace()
+
+    val forkJoinExecutorService = new ForkJoinPool(
       numberOfThreads,
       NamedFjpThreadFactory("play-internal-execution-context"),
       null,
-      true))
-
+      true)
+    println("application is " + play.api.Play.maybeApplication)
+    val ret = ExecutionContext.fromExecutorService(play.api.Play.maybeApplication.flatMap(_.global.getExecutorServiceDecorator(forkJoinExecutorService)).getOrElse(forkJoinExecutorService))
+    println("returning " + ret.getClass.getName)
+    ret
   }
 
   object Implicits {

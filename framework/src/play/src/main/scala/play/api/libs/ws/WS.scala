@@ -2,6 +2,8 @@ package play.api.libs.ws
 
 import java.io.File
 import java.util.concurrent.atomic.AtomicReference
+import play.api.libs.concurrent.ContextPropagatingFuture
+
 import scala.concurrent.{ Future, Promise }
 import play.api.libs.iteratee._
 import play.api.libs.iteratee.Input._
@@ -245,7 +247,7 @@ object WS {
           result.failure(t)
         }
       })
-      result.future
+      new ContextPropagatingFuture(result.future)
     }
 
     /**

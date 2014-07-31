@@ -1,5 +1,8 @@
 package play.api
 
+import java.util.concurrent.ExecutorService
+
+import play.api.libs.concurrent.ContextPropagator
 import play.api.mvc._
 import java.io.File
 import scala.util.control.NonFatal
@@ -181,7 +184,14 @@ trait GlobalSettings {
     controllerClass.newInstance();
   }
 
+
+  def getExecutorServiceDecorator(delegate: ExecutorService): Option[ExecutorService] = None
+
+  def buildContextPropagator: Option[ContextPropagator] = None
+
 }
+
+
 
 /**
  * The default global settings if not defined in the application.

@@ -80,6 +80,7 @@ object Play {
     stop()
 
     _currentApp = app
+    println("starting " + app.getClass.getName)
 
     // Ensure routes are eagerly loaded, so that the reverse routers are correctly initialised before plugins are
     // started.
