@@ -30,18 +30,12 @@ private[play] object Execution {
     val numberOfThreads = play.api.Play.maybeApplication.map(_.configuration.getInt("internal-threadpool-size")).flatten
       .getOrElse(Runtime.getRuntime.availableProcessors)
 
-    println("in modified execution ")
-    new Exception().printStackTrace()
-
     val forkJoinExecutorService = new ForkJoinPool(
       numberOfThreads,
       NamedFjpThreadFactory("play-internal-execution-context"),
       null,
       true)
-    println("application is " + play.api.Play.maybeApplication)
-    val ret = ExecutionContext.fromExecutorService(play.api.Play.maybeApplication.flatMap(_.global.getExecutorServiceDecorator(forkJoinExecutorService)).getOrElse(forkJoinExecutorService))
-    println("returning " + ret.getClass.getName)
-    ret
+    ExecutionContext.fromExecutorService(forkJoinExecutorService)
   }
 
   object Implicits {

@@ -3,6 +3,7 @@ package controllers
 import com.linkedin.dataholder.DataHolder
 import play.api.data.Forms._
 import play.api.data._
+import play.api.libs.concurrent.ThreadLogBuffer
 import play.api.libs.ws.WS
 import play.api.mvc._
 import play.api.libs.concurrent.Execution.Implicits._
@@ -31,51 +32,52 @@ object Application extends Controller {
   def index = Action.async {
     val dataHolder = new DataHolder
     DataHolder.INSTANCE.set(dataHolder)
-    setCount(2)
-    println("after initial set should be 2 " + buildCount)
+    setCount(22)
+    log("after initial set should be 22 " + buildCount)
 
     val taRequest = WS.url("http://www.tripadvisor.com").get.map{ response =>
-      println("In second WS map " + buildCount)
+      log("In second WS map " + buildCount)
       Thread.sleep(700);
-      println("Done waiting in second WS map " + buildCount)
-      setCount(4)
-      println("Set in second WS map should be 4" + buildCount)
+      log("Done waiting in second WS map should be 22 " + buildCount)
+      setCount(44)
+      log("Set in second WS map should be 44" + buildCount)
       response
     }
 
     val liRequest = WS.url("http://www.linkedin.com").get.map{ response =>
-      println("In first WS map " + buildCount)
+      log("In first WS map " + buildCount)
       Thread.sleep(300);
-      println("Done waiting in first WS map " + buildCount)
-      setCount(3)
-      println("Set in first WS map should be 3 " + buildCount)
+      log("Done waiting in first WS map should be 22 " + buildCount)
+      setCount(33)
+      log("Set in first WS map should be 33 " + buildCount)
       response
     }
     val other = Future{
-      println("waiting in other future " + buildCount)
-      Thread.sleep(500)
-      println("done waiting in other future " + buildCount)
-      setCount(5)
-      println("set in other future should have 5" + buildCount)
+      log("waiting in other future should be 22 " + buildCount)
+      Thread.sleep(1500)
+      log("done waiting in other future should be 22 " + buildCount)
+      setCount(55)
+      log("set in other future should have 55" + buildCount)
       "FutureString!"
     }.map{ str =>
-      setCount(6) // 6
-      println("set in other's map and should have 6 " + buildCount)
+      log("before set in other's map and should have 55 " + buildCount)
+      setCount(66)
+      log("set in other's map and should have 66 " + buildCount)
       str
     }
 
     other.onComplete { result =>
-      println("In oncomplete 1 about to increment " + buildCount)
-      Thread.sleep(300)
-      setCount(7)
-      println("In oncomplete 1 after set should be 7 and is " + buildCount)
+      log("In oncomplete 1 about should have 66 " + buildCount)
+      Thread.sleep(1300)
+      setCount(77)
+      log("In oncomplete 1 after set should be 77 and is " + buildCount)
     }
 
     other.onComplete { result =>
-      println("In oncomplete 2 about to increment " + buildCount)
+      log("In oncomplete 2 about should have 66 " + buildCount)
       Thread.sleep(500)
-      setCount(8)
-      println("In oncomplete 2 after set should be 8 and is" + buildCount)
+      setCount(88)
+      log("In oncomplete 2 after set should be 88 and is" + buildCount)
     }
     val ret = for {
       trip <- taRequest
@@ -86,17 +88,22 @@ object Application extends Controller {
       // XXX - so we'll actually get the result of the future that is last in the chain that has a map applied on it
       // XXX - flipping the order of trip and lnkd gives different results
       // XXX - not intuitive but I don't think we can get around this
-      println("finally done and is " + buildCount)
+      log("finally done and is " + buildCount)
       Ok(s"LI: ${lnkd.status} and TA ${trip.status} $o")
     }
 
-    println("Outside of for block and is " + buildCount)
+    log("Outside of for block should be 22 " + buildCount)
     Await.result(ret, 10 seconds)
-    println("After await and is " + buildCount)
+    log("After await should be 22 " + buildCount)
     ret
 
   }
 
+  def log(s: String) = {
+    println(s)
+    ThreadLogBuffer.log(s + "\n")
+  }
+  
   /**
    * Handles the form submission.
    */
@@ -108,7 +115,7 @@ object Application extends Controller {
   }
 
   def setCount(count: Int) = Option(DataHolder.getInstance()).foreach { data =>
-    println(s"setting to $count for " + System.identityHashCode(data) + " on thread " + Thread.currentThread().getName)
+    log(s"setting to $count for " + System.identityHashCode(data) + " on thread " + Thread.currentThread().getName)
     data.setCount(count)
   }
   def buildCount = {

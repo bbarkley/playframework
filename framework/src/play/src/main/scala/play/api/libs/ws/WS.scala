@@ -247,7 +247,7 @@ object WS {
           result.failure(t)
         }
       })
-      new ContextPropagatingFuture(result.future)
+      result.future
     }
 
     /**

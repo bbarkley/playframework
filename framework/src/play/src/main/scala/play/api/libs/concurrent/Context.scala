@@ -2,10 +2,10 @@ package play.api.libs.concurrent
 
 import java.util.concurrent._
 
-import akka.dispatch.{ExecutorServiceFactory, ForkJoinExecutorConfigurator, ExecutorServiceConfigurator, DispatcherPrerequisites}
+import akka.dispatch._
 import com.typesafe.config.Config
 
-import scala.concurrent.duration.Duration
+import scala.concurrent.duration.{FiniteDuration, Duration}
 import scala.concurrent.{ExecutionContextExecutor, CanAwait, ExecutionContext, Future}
 import scala.util.Try
 
@@ -17,15 +17,75 @@ import scala.util.Try
 // TODO - may need to make this stateful for IC and add more lifecycle methods for 2-way prop
 trait ContextPropagator {
   // TODO - figure out how to get this working with generics instead of a map
-  def snapshotContext: Map[String, Any]
+  // if the context doesn't exists (or is empty return None)
+  def snapshotContext: Option[Map[String, Any]]
 
   def restoreContext(context: Map[String, Any])
 
   def clearContext()
 
   // TODO - would like this to return same type as itself - seems to require self referencing generics which got messy - http://stackoverflow.com/a/20165721/2175505
-  def withInitialContext(context: Map[String, Any] = snapshotContext): ContextPropagator
+  def withInitialContext(context: Map[String, Any] = snapshotContext.get): ContextPropagator
 }
+
+/**
+ * Modeled after DispatcherConfigurator
+ * @param config
+ * @param prerequisites
+ */
+class ContextPropagatingDispatcherConfigurator(config: Config, prerequisites: DispatcherPrerequisites) extends MessageDispatcherConfigurator(config, prerequisites) {
+  private val instance = new ContextPropagatingDispatcher(
+    this,
+    config.getString("id"),
+    config.getInt("throughput"),
+    Duration(config.getNanoseconds("throughput-deadline-time"), TimeUnit.NANOSECONDS),
+    configureExecutor(),
+    Duration(config.getMilliseconds("shutdown-timeout"), TimeUnit.MILLISECONDS))
+
+  /**
+   * Returns the same dispatcher instance for each invocation
+   */
+  override def dispatcher(): MessageDispatcher = instance
+}
+
+class ContextPropagatingDispatcher(_configurator: MessageDispatcherConfigurator,
+                                   override val id: String,
+                                   override val throughput: Int,
+                                   override val throughputDeadlineTime: Duration,
+                                   executorServiceFactoryProvider: ExecutorServiceFactoryProvider,
+                                   override val shutdownTimeout: FiniteDuration)
+  extends Dispatcher(_configurator, id, throughput, throughputDeadlineTime, executorServiceFactoryProvider, shutdownTimeout) { self =>
+
+  override def prepare(): ExecutionContext = {
+    val contextPropagator = play.api.Play.maybeApplication.flatMap(_.global.buildContextPropagator)
+    val initialState = contextPropagator.flatMap(_.snapshotContext)
+//    println(s"Preparing on thread ${Thread.currentThread().getName}")
+    val prepareThread = Thread.currentThread().getName
+    new ExecutionContext {
+
+      override def reportFailure(t: Throwable): Unit = self.reportFailure(t)
+
+      override def execute(runnable: Runnable): Unit = {
+        val incomingThreadState = contextPropagator.flatMap(_.snapshotContext)
+        val incomingThread = Thread.currentThread().getName
+        self.execute(new Runnable() {
+          override def run(): Unit = {
+            println(s"Running on thread ${Thread.currentThread().getName} original: ${initialState.orNull} from $prepareThread incoming: ${incomingThreadState.orNull} from $incomingThread")
+            contextPropagator.foreach(_.restoreContext(incomingThreadState.getOrElse(initialState.getOrElse(Map()))))
+            try {
+              runnable.run()
+            } finally {
+              contextPropagator.foreach(_.clearContext())
+            }
+          }
+        })
+      }
+    }
+  }
+}
+
+
+
 
 class ContextPropagatingForkJoinExecutorServiceConfigurator(config: Config, prerequisites: DispatcherPrerequisites) extends ExecutorServiceConfigurator(config, prerequisites) {
   val forkJoinConfigurator = new ForkJoinExecutorConfigurator(config.getConfig("fork-join-executor"), prerequisites)
@@ -68,12 +128,14 @@ class ContextPropagatingExecutorService(propagator: ContextPropagator, delegate:
     val incomingThread = Thread.currentThread().getName
     override def run(): Unit = {
       var runLog = s"Starting run on thread ${Thread.currentThread().getName} with value of $incomingContext from thread $incomingThread"
-      propagator.restoreContext(incomingContext)
+      propagator.restoreContext(incomingContext.get)
       try {
         super.run()
       } finally {
+        runLog += "\t" + ThreadLogBuffer.get()
         runLog += s"\nRun ended with ${propagator.snapshotContext}"
         println("====" + "\n" + runLog + "\n====\n\n")
+        ThreadLogBuffer.clear()
         propagator.clearContext
       }
     }
@@ -117,18 +179,20 @@ class WrappingExecutionContext(delegate: ExecutionContext) extends ExecutionCont
 }
 
 
-class ContextPropagatingRunnable(propagator: ContextPropagator, delegate: Runnable, name: Option[String] = None) extends Runnable {
+class ContextPropagatingRunnable(propagator: ContextPropagator, delegate: Runnable) extends Runnable {
   val incomingContext = propagator.snapshotContext
   val incomingThread = Thread.currentThread().getName
   override def run(): Unit = {
-    var runLog = s"In $name starting run on thread ${Thread.currentThread().getName} with value of $incomingContext from thread $incomingThread"
-    propagator.restoreContext(incomingContext)
+    var runLog = s"Starting run on thread ${Thread.currentThread().getName} with value of $incomingContext from thread $incomingThread"
+    propagator.restoreContext(incomingContext.get)
     try {
       delegate.run()
     } finally {
+      runLog += "\t" + ThreadLogBuffer.get()
       runLog += s"\nRun ended with ${propagator.snapshotContext}"
       println("====" + "\n" + runLog + "\n====\n\n")
       propagator.clearContext
+      ThreadLogBuffer.clear()
     }
   }
 }
