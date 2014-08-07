@@ -2,7 +2,6 @@ package play.api.libs.ws
 
 import java.io.File
 import java.util.concurrent.atomic.AtomicReference
-import play.api.libs.concurrent.ContextPropagatingFuture
 
 import scala.concurrent.{ Future, Promise }
 import play.api.libs.iteratee._

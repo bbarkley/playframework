@@ -184,9 +184,6 @@ trait GlobalSettings {
     controllerClass.newInstance();
   }
 
-
-  def getExecutorServiceDecorator(delegate: ExecutorService): Option[ExecutorService] = None
-
   def buildContextPropagator: Option[ContextPropagator] = None
 
 }
