@@ -14,7 +14,8 @@ import scala.concurrent.duration.{Duration, FiniteDuration}
 
 
 // TODO - may need to make this stateful for IC and add more lifecycle methods for 2-way prop
-trait ContextPropagator {
+trait ContextPropagator { self =>
+  type Context = Option[Map[String, Any]]
   // TODO - figure out how to get this working with generics instead of a map
   // if the context doesn't exists (or is empty return None)
   def snapshotContext: Option[Map[String, Any]]
@@ -22,6 +23,19 @@ trait ContextPropagator {
   def restoreContext(context: Map[String, Any])
 
   def clearContext()
+
+  def wrapRunnable(callSiteCtx: Context, executeCtx: Context, runnable: Runnable): Runnable = {
+    new Runnable {
+      override def run(): Unit = {
+        self.restoreContext(executeCtx.getOrElse(callSiteCtx.getOrElse(Map())))
+        try {
+          runnable.run()
+        } finally {
+          self.clearContext()
+        }
+      }
+    }
+  }
 
   // TODO - would like this to return same type as itself - seems to require self referencing generics which got messy - http://stackoverflow.com/a/20165721/2175505
   def withInitialContext(context: Map[String, Any] = snapshotContext.get): ContextPropagator
@@ -66,15 +80,11 @@ class ContextPropagatingDispatcher(_configurator: MessageDispatcherConfigurator,
       override def execute(runnable: Runnable): Unit = {
         val incomingThreadState = contextPropagator.flatMap(_.snapshotContext)
         val incomingThread = Thread.currentThread().getName
+        val wrappedRunnable = contextPropagator.map(_.wrapRunnable(initialState, incomingThreadState, runnable)).getOrElse(runnable)
         self.execute(new Runnable() {
           override def run(): Unit = {
             println(s"Running on thread ${Thread.currentThread().getName} original: ${initialState.orNull} from $prepareThread incoming: ${incomingThreadState.orNull} from $incomingThread")
-            contextPropagator.foreach(_.restoreContext(incomingThreadState.getOrElse(initialState.getOrElse(Map()))))
-            try {
-              runnable.run()
-            } finally {
-              contextPropagator.foreach(_.clearContext())
-            }
+            wrappedRunnable.run()
           }
         })
       }

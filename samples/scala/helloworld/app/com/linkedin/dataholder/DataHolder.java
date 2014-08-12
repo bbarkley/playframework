@@ -1,5 +1,6 @@
 package com.linkedin.dataholder;
 
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -25,7 +26,15 @@ public class DataHolder {
     }
 
     public Map<String, Object> getData() {
-        return data;
+        return Collections.unmodifiableMap(data);
+    }
+
+    public void addData(Map<String, Object> data) {
+        this.data.putAll(data);
+    }
+
+    public void addData(String key, Object value) {
+        this.data.put(key, value);
     }
 
     public int getCount() {
@@ -38,11 +47,11 @@ public class DataHolder {
     }
 
     public DataHolder copy() {
-        return new DataHolder(getCount(), getData());
+        return new DataHolder(getCount(), new HashMap<>(getData()));
     }
 
     @Override
     public String toString() {
-        return "DataHolder: " + count + " " + System.identityHashCode(this);
+        return "DataHolder: " + count + " and " + data + System.identityHashCode(this);
     }
 }
