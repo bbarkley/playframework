@@ -26,9 +26,9 @@ object HttpExecutionContext {
  * in the current thread. Actual execution is performed by a delegate ExecutionContext.
  */
 class HttpExecutionContext(contextClassLoader: ClassLoader, httpContext: Http.Context, delegate: ExecutionContext) extends ExecutionContextExecutor {
-  def execute(runnable: Runnable) = delegate.execute(wrapRunnable(runnable))
+  override def execute(runnable: Runnable) = delegate.execute(wrapRunnable(runnable))
 
-  def reportFailure(t: Throwable) = delegate.reportFailure(t)
+  override def reportFailure(t: Throwable) = delegate.reportFailure(t)
 
   override def prepare(): ExecutionContext = {
     val delegatePrepared = delegate.prepare()
