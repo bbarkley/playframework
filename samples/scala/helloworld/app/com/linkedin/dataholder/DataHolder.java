@@ -3,6 +3,7 @@ package com.linkedin.dataholder;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * @author bbarkley
@@ -16,7 +17,7 @@ public class DataHolder {
 
     private volatile int count = 0;
 
-    public volatile Map<String, Object> data = new HashMap<>();
+    public volatile Map<String, Object> data = new ConcurrentHashMap<>();
 
     public DataHolder() {}
 

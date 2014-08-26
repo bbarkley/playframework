@@ -20,6 +20,8 @@ trait ContextPropagator { self =>
   // if the context doesn't exists (or is empty return None)
   def snapshotContext: Option[Map[String, Any]]
 
+  def copyContext(context: Map[String, Any]): Map[String, Any]
+
   def restoreContext(context: Map[String, Any])
 
   def clearContext()
@@ -70,9 +72,10 @@ class ContextPropagatingDispatcher(_configurator: MessageDispatcherConfigurator,
   extends Dispatcher(_configurator, id, throughput, throughputDeadlineTime, executorServiceFactoryProvider, shutdownTimeout) { self =>
 
   override def prepare(): ExecutionContext = {
+    val callSiteClassloader = Thread.currentThread().getContextClassLoader()
     val contextPropagator = play.api.Play.maybeApplication.flatMap(_.global.buildContextPropagator)
     val initialState = contextPropagator.flatMap(_.snapshotContext)
-    val prepareThread = Thread.currentThread().getName
+    val prepareThread = Thread.currentThread().getName()
     new ExecutionContext {
 
       override def reportFailure(t: Throwable): Unit = self.reportFailure(t)
@@ -83,8 +86,16 @@ class ContextPropagatingDispatcher(_configurator: MessageDispatcherConfigurator,
         val wrappedRunnable = contextPropagator.map(_.wrapRunnable(initialState, incomingThreadState, runnable)).getOrElse(runnable)
         self.execute(new Runnable() {
           override def run(): Unit = {
+            val currentThread = Thread.currentThread()
+            val originalClassloader = currentThread.getContextClassLoader
             println(s"Running on thread ${Thread.currentThread().getName} original: ${initialState.orNull} from $prepareThread incoming: ${incomingThreadState.orNull} from $incomingThread")
-            wrappedRunnable.run()
+            try {
+              currentThread.setContextClassLoader(callSiteClassloader)
+              wrappedRunnable.run()
+            }
+            finally {
+              currentThread.setContextClassLoader(originalClassloader)
+            }
           }
         })
       }

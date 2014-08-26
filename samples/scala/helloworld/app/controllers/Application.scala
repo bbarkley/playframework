@@ -3,13 +3,14 @@ package controllers
 import com.linkedin.dataholder.DataHolder
 import play.api.data.Forms._
 import play.api.data._
+import play.api.libs.concurrent.Execution.Implicits._
 import play.api.libs.concurrent.ThreadLogBuffer
 import play.api.libs.ws.WS
 import play.api.mvc._
-import play.api.libs.concurrent.Execution.Implicits._
 import views._
-import scala.concurrent.duration._
+
 import scala.concurrent._
+import scala.concurrent.duration._
 
 object Application extends Controller {
 
@@ -25,6 +26,9 @@ object Application extends Controller {
   )
 
   // -- Actions
+
+
+
 
   /**
    * Home page
@@ -72,7 +76,7 @@ object Application extends Controller {
     }
 
     other.onComplete { result =>
-      log("In oncomplete 1 about should have 66 " + buildCount)
+      log("In oncomplete 1 before set should have 66 " + buildCount)
       Thread.sleep(1300)
       setCount(77)
       addData(77)
@@ -86,8 +90,8 @@ object Application extends Controller {
       addData(88)
       log("In oncomplete 2 after set should be 88 and is" + buildCount)
     }
-    val retRaw = taRequest.flatMap{ taResult =>
-      liRequest.flatMap { liResult =>
+    val retRaw = new ContextPropagatingFuture(taRequest).flatMap{ taResult =>
+      new ContextPropagatingFuture(liRequest).flatMap { liResult =>
         other.map { otherResult =>
           // would expect all data to be visible here
           log("finally done in flatmap and is " + buildCount)
@@ -105,7 +109,7 @@ object Application extends Controller {
       // XXX - weird behavior here - for-comprehensions are implemented as chained flatmaps
       // XXX - but we seem to get the result from the execution that takes the longest to complete
       // XXX - not sure what can be done to get around this
-      log("finally done and is " + buildCount)
+      log("finally done in for-comprehension and is " + buildCount)
       Ok(s"LI: ${lnkd.status} and TA ${trip.status} $o")
     }
 
@@ -144,3 +148,9 @@ object Application extends Controller {
     s"---->Count is ${dataOpt.map(_.getCount).orNull} data is ${dataOpt.map(_.getData)} for ${dataOpt.map(System.identityHashCode(_)).orNull} on thread ${Thread.currentThread().getName}"
   }
 }
+
+
+
+
+
+
